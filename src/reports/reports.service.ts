@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import fs from 'fs';
 import path from 'path';
 import { performance } from 'perf_hooks';
@@ -19,7 +19,13 @@ export class ReportsService {
   private statesMap: Map<string, Record<ReportScope, string>> = new Map();
 
   getReports(jobID: string) {
-    return this.statesMap.get(jobID);
+    const result = this.statesMap.get(jobID);
+    if (result) {
+      return result;
+    }
+    throw new NotFoundException(
+      `no report generation job found for id ${jobID}`,
+    );
   }
 
   generate() {

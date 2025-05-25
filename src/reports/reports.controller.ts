@@ -1,4 +1,11 @@
-import { Controller, Get, Post, HttpCode } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ReportsService } from './reports.service';
 
 @Controller('api/v1/reports')
@@ -6,20 +13,18 @@ export class ReportsController {
   constructor(private reportsService: ReportsService) {}
 
   @Get()
-  report() {
-    return {
-      'accounts.csv': this.reportsService.state('accounts'),
-      'yearly.csv': this.reportsService.state('yearly'),
-      'fs.csv': this.reportsService.state('fs'),
-    };
+  report(@Query('jobID') jobID: string) {
+    if (jobID) {
+      // Return the state for the requested file
+      return this.reportsService.getReports(jobID);
+    }
+    // If no file query param, return all
+    throw new BadRequestException('mandatory jobID query param not provided');
   }
 
   @Post()
   @HttpCode(201)
   generate() {
-    this.reportsService.accounts();
-    this.reportsService.yearly();
-    this.reportsService.fs();
-    return { message: 'finished' };
+    return this.reportsService.generate();
   }
 }

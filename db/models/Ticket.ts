@@ -1,11 +1,11 @@
 import {
-  Table,
-  Column,
-  Model,
-  BelongsTo,
-  ForeignKey,
-  PrimaryKey,
   AutoIncrement,
+  BelongsTo,
+  Column,
+  ForeignKey,
+  Model,
+  PrimaryKey,
+  Table,
 } from 'sequelize-typescript';
 import { Company } from './Company';
 import { User } from './User';
@@ -18,6 +18,7 @@ export enum TicketStatus {
 export enum TicketType {
   managementReport = 'managementReport',
   registrationAddressChange = 'registrationAddressChange',
+  strikeOff = 'strikeOff',
 }
 
 export enum TicketCategory {

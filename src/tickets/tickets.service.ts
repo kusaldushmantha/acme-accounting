@@ -60,7 +60,9 @@ export class TicketsService {
       assignees = await User.findAll({ where: { companyId, role: userRole } });
 
       if (assignees.length > 1)
-        throw new ConflictException(`Multiple corporate secretaries found`);
+        throw new ConflictException(
+          `Multiple users with role corporateSecretary. Cannot create a ticket`,
+        );
 
       if (assignees.length === 0) {
         userRole = UserRole.director;

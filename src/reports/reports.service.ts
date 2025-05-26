@@ -18,6 +18,8 @@ export class ReportsService {
   };
 
   private statesMap: Map<string, Record<ReportScope, string>> = new Map();
+
+  // Simple cache to store already calculated files
   private accountsCache: Map<string, Record<string, number>> = new Map();
   private yearlyCache: Map<string, Record<string, number>> = new Map();
   private fsCache: Map<string, Record<string, number>> = new Map();
@@ -95,8 +97,9 @@ export class ReportsService {
       for (const file of files) {
         if (file.endsWith('.csv')) {
           const filePath = path.join(tmpDir, file);
-          const content = await fs.promises.readFile(filePath, 'utf-8');
 
+          // Cache the output based on the content hash so we can avoid re-processing unchanged files.
+          const content = await fs.promises.readFile(filePath, 'utf-8');
           const hash = createHash('sha256').update(content).digest('hex');
 
           let fileAccountBalances: Record<string, number>;
@@ -167,8 +170,9 @@ export class ReportsService {
       for (const file of files) {
         if (file.endsWith('.csv') && file !== 'yearly.csv') {
           const filePath = path.join(tmpDir, file);
-          const content = await fs.promises.readFile(filePath, 'utf-8');
 
+          // Cache the output based on the content hash so we can avoid re-processing unchanged files.
+          const content = await fs.promises.readFile(filePath, 'utf-8');
           const hash = createHash('sha256').update(content).digest('hex');
 
           let fileYearlyData: Record<string, number>;
@@ -282,9 +286,11 @@ export class ReportsService {
       for (const file of files) {
         if (file.endsWith('.csv') && file !== 'fs.csv') {
           const filePath = path.join(tmpDir, file);
-          const content = await fs.promises.readFile(filePath, 'utf-8');
 
+          // Cache the output based on the content hash so we can avoid re-processing unchanged files.
+          const content = await fs.promises.readFile(filePath, 'utf-8');
           const hash = createHash('sha256').update(content).digest('hex');
+
           const cacheKey = `${filePath}-${hash}`;
 
           let fileBalances: Record<string, number>;

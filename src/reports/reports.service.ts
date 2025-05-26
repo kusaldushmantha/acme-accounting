@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { performance } from 'perf_hooks';
 import { v4 as uuidV4 } from 'uuid';
+import { createHash } from 'crypto';
 
 type ReportScope = 'accounts' | 'yearly' | 'fs';
 
@@ -17,6 +18,9 @@ export class ReportsService {
   };
 
   private statesMap: Map<string, Record<ReportScope, string>> = new Map();
+  private accountsCache: Map<string, Record<string, number>> = new Map();
+  private yearlyCache: Map<string, Record<string, number>> = new Map();
+  private fsCache: Map<string, Record<string, number>> = new Map();
 
   getReports(jobID: string) {
     const result = this.statesMap.get(jobID);
@@ -90,19 +94,39 @@ export class ReportsService {
 
       for (const file of files) {
         if (file.endsWith('.csv')) {
-          const content = await fs.promises.readFile(
-            path.join(tmpDir, file),
-            'utf-8',
-          );
+          const filePath = path.join(tmpDir, file);
+          const content = await fs.promises.readFile(filePath, 'utf-8');
 
-          const lines = content.trim().split('\n');
-          for (const line of lines) {
-            const [, account, , debit, credit] = line.split(',');
+          const hash = createHash('sha256').update(content).digest('hex');
+
+          let fileAccountBalances: Record<string, number>;
+          const cacheKey = `${filePath}-${hash}`;
+
+          if (this.accountsCache.has(cacheKey)) {
+            fileAccountBalances = this.accountsCache.get(cacheKey)!;
+          } else {
+            // Compute balances from file
+            fileAccountBalances = {};
+            const lines = content.trim().split('\n');
+
+            for (const line of lines) {
+              const [, account, , debit, credit] = line.split(',');
+              if (!fileAccountBalances[account]) {
+                fileAccountBalances[account] = 0;
+              }
+              fileAccountBalances[account] +=
+                parseFloat(debit || '0') - parseFloat(credit || '0');
+            }
+
+            this.accountsCache.set(cacheKey, fileAccountBalances);
+          }
+
+          // Merge balances into global accountBalances
+          for (const [account, amount] of Object.entries(fileAccountBalances)) {
             if (!accountBalances[account]) {
               accountBalances[account] = 0;
             }
-            accountBalances[account] +=
-              parseFloat(String(debit || 0)) - parseFloat(String(credit || 0));
+            accountBalances[account] += amount;
           }
         }
       }
@@ -142,23 +166,40 @@ export class ReportsService {
       const files = await fs.promises.readdir(tmpDir);
       for (const file of files) {
         if (file.endsWith('.csv') && file !== 'yearly.csv') {
-          const content = await fs.promises.readFile(
-            path.join(tmpDir, file),
-            'utf-8',
-          );
+          const filePath = path.join(tmpDir, file);
+          const content = await fs.promises.readFile(filePath, 'utf-8');
 
-          const lines = content.trim().split('\n');
-          for (const line of lines) {
-            const [date, account, , debit, credit] = line.split(',');
-            if (account === 'Cash') {
-              const year = new Date(date).getFullYear();
-              if (!cashByYear[year]) {
-                cashByYear[year] = 0;
+          const hash = createHash('sha256').update(content).digest('hex');
+
+          let fileYearlyData: Record<string, number>;
+          const cacheKey = `${filePath}-${hash}`;
+
+          if (this.yearlyCache.has(cacheKey)) {
+            fileYearlyData = this.yearlyCache.get(cacheKey)!;
+          } else {
+            fileYearlyData = {};
+            const lines = content.trim().split('\n');
+            for (const line of lines) {
+              const [date, account, , debit, credit] = line.split(',');
+              if (account === 'Cash') {
+                const year = new Date(date).getFullYear().toString();
+                if (!fileYearlyData[year]) {
+                  fileYearlyData[year] = 0;
+                }
+                fileYearlyData[year] +=
+                  parseFloat(debit || '0') - parseFloat(credit || '0');
               }
-              cashByYear[year] +=
-                parseFloat(String(debit || 0)) -
-                parseFloat(String(credit || 0));
             }
+
+            this.yearlyCache.set(cacheKey, fileYearlyData);
+          }
+
+          // Merge file data into global cashByYear
+          for (const [year, value] of Object.entries(fileYearlyData)) {
+            if (!cashByYear[year]) {
+              cashByYear[year] = 0;
+            }
+            cashByYear[year] += value;
           }
         }
       }
@@ -191,6 +232,7 @@ export class ReportsService {
     const start = performance.now();
     const tmpDir = 'tmp';
     const outputFile = 'out/fs.csv';
+
     const categories = {
       'Income Statement': {
         Revenues: ['Sales Revenue'],
@@ -222,7 +264,9 @@ export class ReportsService {
         Equity: ['Common Stock', 'Retained Earnings'],
       },
     };
+
     const balances: Record<string, number> = {};
+
     for (const section of Object.values(categories)) {
       for (const group of Object.values(section)) {
         for (const account of group) {
@@ -237,21 +281,36 @@ export class ReportsService {
 
       for (const file of files) {
         if (file.endsWith('.csv') && file !== 'fs.csv') {
-          // Read file asynchronously
-          const content = await fs.promises.readFile(
-            path.join(tmpDir, file),
-            'utf-8',
-          );
+          const filePath = path.join(tmpDir, file);
+          const content = await fs.promises.readFile(filePath, 'utf-8');
 
-          const lines = content.trim().split('\n');
-          for (const line of lines) {
-            const [, account, , debit, credit] = line.split(',');
+          const hash = createHash('sha256').update(content).digest('hex');
+          const cacheKey = `${filePath}-${hash}`;
 
-            if (Object.prototype.hasOwnProperty.call(balances, account)) {
-              balances[account] +=
-                parseFloat(String(debit || 0)) -
-                parseFloat(String(credit || 0));
+          let fileBalances: Record<string, number>;
+
+          if (this.fsCache.has(cacheKey)) {
+            fileBalances = this.fsCache.get(cacheKey)!;
+          } else {
+            fileBalances = {};
+            const lines = content.trim().split('\n');
+            for (const line of lines) {
+              const [, account, , debit, credit] = line.split(',');
+
+              if (Object.prototype.hasOwnProperty.call(balances, account)) {
+                if (!fileBalances[account]) {
+                  fileBalances[account] = 0;
+                }
+                fileBalances[account] +=
+                  parseFloat(debit || '0') - parseFloat(credit || '0');
+              }
             }
+            this.fsCache.set(cacheKey, fileBalances);
+          }
+
+          // Merge into global balances
+          for (const [account, value] of Object.entries(fileBalances)) {
+            balances[account] += value;
           }
         }
       }

@@ -26,7 +26,8 @@
     "pg": "8.14.1",
     "reflect-metadata": "0.2.2",
     "sequelize": "6.37.7",
-    "sequelize-typescript": "2.1.6"
+    "sequelize-typescript": "2.1.6",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.3.1",
